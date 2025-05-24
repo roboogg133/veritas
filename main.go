@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -10,13 +10,34 @@ import (
 
 func main() {
 
-	prompt := "Qual a cor do céu?"
+	prompt := `Você é uma inteligência artificial chamada Anfitrião. Sua missão é criar histórias de mistério para um jogo de dedução.
 
-	payload := []byte(fmt.Sprintf(`{"model": "gemma3:1b",
-		"prompt" : "%s",
-		"stream": false}`, prompt))
+Formato da resposta:
+--TITULO--
+[Título da história]
+--TITULO--
 
-	body := bytes.NewBuffer(payload)
+--DESFECHO--
+[Resumo do que acontece no fim da história, sem explicar como chegou lá]
+--DESFECHO--
+
+--HISTORIA--
+[A história completa, com todos os eventos que levam ao desfecho. Seja criativo, mas consistente. O jogador não verá esta parte.]
+--HISTORIA--
+Não adicione nada fora desse formato.`
+
+	payload := map[string]interface{}{
+		"model":  "gemma3:1b",
+		"prompt": prompt,
+		"stream": false,
+	}
+
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatal("Error creating json : ", err)
+	}
+
+	body := bytes.NewBuffer(payloadJson)
 
 	response, err := http.Post("http://localhost:11434/api/generate", "application/json", body)
 	if err != nil {
@@ -27,5 +48,8 @@ func main() {
 
 	if response.StatusCode == 200 {
 		log.Println(string(responseBody))
+	}
+	if response.StatusCode != 200 {
+		log.Fatal(response.Status + "\n" + string(responseBody))
 	}
 }
