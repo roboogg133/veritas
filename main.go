@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginRequest struct {
@@ -15,28 +16,49 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-func Encrypt() {
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
+	return string(bytes), err
 }
 
-func GetUserAndPassword(user string) (string, string) {
+func Authenticate(user string, rawpass string) bool {
 	config.InitDB()
 
-	var username, password string
+	var password string
 
+	// Search for the username
 	err := config.DB.QueryRow(context.Background(),
-		"SELECT username, password FROM users WHERE username = $1", user).Scan(&username, &password)
+		"SELECT password FROM users WHERE username = $1", user).Scan(&password)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "fuck ", "me"
+			return false
 		} else {
 			log.Panic(err)
 		}
 	}
 
-	return username, password
+	err = bcrypt.CompareHashAndPassword([]byte(password), []byte(rawpass))
+	if err != nil {
+		return false
+	} else {
+		return true
+	}
 
+}
+
+func Register(username string, password string) error {
+
+	config.InitDB()
+
+	_, err := config.DB.Exec(context.Background(),
+		"INSERT INTO users (username, password) VALUES ($1, $2)", username, password)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
@@ -51,15 +73,36 @@ func main() {
 			return
 		}
 
-		if req.Username == "arrombado" && req.Password == "arrombado1" {
-			back.JSON(http.StatusOK, gin.H{"response": "authenticated"})
-		} else {
+		value := Authenticate(req.Username, req.Password)
 
-			back.JSON(http.StatusFound, gin.H{"response": Authenticate(req.Username)})
-
-			//	back.JSON(http.StatusUnauthorized, gin.H{"response": "invalid"})
+		if value == true {
+			back.JSON(http.StatusOK, gin.H{"response": "Authenticated"})
 		}
+		if value == false {
+			back.JSON(http.StatusUnauthorized, gin.H{"response": "Unauthorized"})
+		}
+
 	})
+
+	r.POST("/api/register", func(back *gin.Context) {
+
+		var req LoginRequest
+
+		if err := back.ShouldBindJSON(&req); err != nil {
+			back.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
+			return
+		}
+
+		if req.Username == "" || req.Username == " " || req.Password == "" {
+			back.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
+		}
+
+		password, _ := HashPassword(req.Password)
+
+		Register(req.Username, password)
+
+	})
+
 	r.Run()
 
 }
