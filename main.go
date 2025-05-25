@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"veritas/config"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -93,13 +95,18 @@ func main() {
 			return
 		}
 
-		if req.Username == "" || req.Username == " " || req.Password == "" {
+		if strings.ContainsAny(req.Username, " ") || strings.ContainsAny(req.Password, " ") || req.Password == "" || req.Username == "" {
 			back.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
 		}
 
 		password, _ := HashPassword(req.Password)
 
-		Register(req.Username, password)
+		err := Register(req.Username, password)
+		if err != nil {
+			back.JSON(http.StatusBadRequest, gin.H{"response": "username alredy been taken"})
+		} else {
+			back.JSON(http.StatusCreated, gin.H{"response": "suceffuly registered"})
+		}
 
 	})
 
