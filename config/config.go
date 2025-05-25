@@ -6,13 +6,21 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 var Dsn string
 var DB *pgxpool.Pool
+var Pass string
+
+type Claims struct {
+	Username string `json:"username"`
+	jwt.RegisteredClaims
+}
 
 func InitDB() {
 
@@ -40,4 +48,38 @@ func InitDB() {
 
 	DB = dbpool
 
+}
+
+func GenerateJWT(username string) (string, error) {
+
+	godotenv.Load()
+
+	var Secret = []byte(Pass)
+	expirationTime := time.Now().Add(168 * time.Hour)
+
+	claims := &Claims{
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(Secret)
+
+}
+
+func TokenAuthenticate(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(Pass), nil
+	})
+
+	if err != nil || !token.Valid {
+		return nil, err
+	}
+
+	return claims, nil
 }

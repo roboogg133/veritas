@@ -7,7 +7,6 @@ import (
 	"strings"
 	"veritas/config"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -63,6 +62,26 @@ func Register(username string, password string) error {
 	return nil
 }
 
+func Auth() gin.HandlerFunc {
+	return func(back *gin.Context) {
+		tokenString := back.GetHeader("Authorization")
+
+		if tokenString == "" {
+			back.AbortWithStatusJSON(http.StatusForbidden, gin.H{"response": "invalid token"})
+			return
+		}
+
+		claims, err := config.TokenAuthenticate(tokenString)
+		if err != nil {
+			back.AbortWithStatusJSON(http.StatusForbidden, gin.H{"response": "invalid token"})
+			return
+		}
+
+		back.Set("username", claims.Username)
+		back.Next()
+	}
+}
+
 func main() {
 
 	r := gin.Default()
@@ -78,10 +97,18 @@ func main() {
 		value := Authenticate(req.Username, req.Password)
 
 		if value == true {
-			back.JSON(http.StatusOK, gin.H{"response": "Authenticated"})
+			token, err := config.GenerateJWT(req.Username)
+			if err != nil {
+				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate session token"})
+				return
+			}
+
+			back.JSON(http.StatusOK, gin.H{"response": token})
+			return
 		}
 		if value == false {
 			back.JSON(http.StatusUnauthorized, gin.H{"response": "Unauthorized"})
+			return
 		}
 
 	})
@@ -104,8 +131,10 @@ func main() {
 		err := Register(req.Username, password)
 		if err != nil {
 			back.JSON(http.StatusBadRequest, gin.H{"response": "username alredy been taken"})
+			return
 		} else {
 			back.JSON(http.StatusCreated, gin.H{"response": "suceffuly registered"})
+			return
 		}
 
 	})
