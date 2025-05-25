@@ -1,55 +1,65 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
+	"context"
 	"log"
 	"net/http"
+	"veritas/config"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func Encrypt() {
+
+}
+
+func GetUserAndPassword(user string) (string, string) {
+	config.InitDB()
+
+	var username, password string
+
+	err := config.DB.QueryRow(context.Background(),
+		"SELECT username, password FROM users WHERE username = $1", user).Scan(&username, &password)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "fuck ", "me"
+		} else {
+			log.Panic(err)
+		}
+	}
+
+	return username, password
+
+}
 
 func main() {
 
-	prompt := `Você é uma inteligência artificial chamada Anfitrião. Sua missão é criar histórias de mistério para um jogo de dedução.
+	r := gin.Default()
+	r.POST("/api/login", func(back *gin.Context) {
 
-Formato da resposta:
---TITULO--
-[Título da história]
---TITULO--
+		var req LoginRequest
 
---DESFECHO--
-[Resumo do que acontece no fim da história, sem explicar como chegou lá]
---DESFECHO--
+		if err := back.ShouldBindJSON(&req); err != nil {
+			back.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
+			return
+		}
 
---HISTORIA--
-[A história completa, com todos os eventos que levam ao desfecho. Seja criativo, mas consistente. O jogador não verá esta parte.]
---HISTORIA--
-Não adicione nada fora desse formato.`
+		if req.Username == "arrombado" && req.Password == "arrombado1" {
+			back.JSON(http.StatusOK, gin.H{"response": "authenticated"})
+		} else {
 
-	payload := map[string]interface{}{
-		"model":  "gemma3:1b",
-		"prompt": prompt,
-		"stream": false,
-	}
+			back.JSON(http.StatusFound, gin.H{"response": Authenticate(req.Username)})
 
-	payloadJson, err := json.Marshal(payload)
-	if err != nil {
-		log.Fatal("Error creating json : ", err)
-	}
+			//	back.JSON(http.StatusUnauthorized, gin.H{"response": "invalid"})
+		}
+	})
+	r.Run()
 
-	body := bytes.NewBuffer(payloadJson)
-
-	response, err := http.Post("http://localhost:11434/api/generate", "application/json", body)
-	if err != nil {
-		log.Fatal("error doing POST request : ", err)
-	}
-
-	responseBody, err := io.ReadAll(response.Body)
-
-	if response.StatusCode == 200 {
-		log.Println(string(responseBody))
-	}
-	if response.StatusCode != 200 {
-		log.Fatal(response.Status + "\n" + string(responseBody))
-	}
 }
