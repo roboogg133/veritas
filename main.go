@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 	"veritas/config"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -85,7 +88,15 @@ func Auth() gin.HandlerFunc {
 func main() {
 
 	r := gin.Default()
-	r.POST("/api/login", func(back *gin.Context) {
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
+	}))
+	r.POST("/service/login", func(back *gin.Context) {
 
 		var req LoginRequest
 
@@ -107,18 +118,18 @@ func main() {
 			return
 		}
 		if value == false {
-			back.JSON(http.StatusUnauthorized, gin.H{"response": "Unauthorized"})
+			back.Status(http.StatusUnauthorized)
 			return
 		}
 
 	})
 
-	r.POST("/api/register", func(back *gin.Context) {
+	r.POST("/service/register", func(back *gin.Context) {
 
 		var req LoginRequest
 
 		if err := back.ShouldBindJSON(&req); err != nil {
-			back.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
+			back.Status(http.StatusBadRequest)
 			return
 		}
 
@@ -131,14 +142,20 @@ func main() {
 		err := Register(req.Username, password)
 		if err != nil {
 			back.JSON(http.StatusBadRequest, gin.H{"response": "username alredy been taken"})
-			return
 		} else {
-			back.JSON(http.StatusCreated, gin.H{"response": "suceffuly registered"})
-			return
+			back.Status(http.StatusCreated)
 		}
 
 	})
 
-	r.Run()
+	r.GET("/service/restrict", Auth(), func(c *gin.Context) {
+
+		user, _ := c.Get("username")
+
+		c.JSON(http.StatusOK, gin.H{"response": fmt.Sprintf("Welcome! %s", user)})
+	})
+
+	// CORS
+	r.Run(":8080")
 
 }
