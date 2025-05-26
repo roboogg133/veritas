@@ -135,6 +135,7 @@ func main() {
 
 		if strings.ContainsAny(req.Username, " ") || strings.ContainsAny(req.Password, " ") || req.Password == "" || req.Username == "" {
 			back.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
+			return
 		}
 
 		password, _ := HashPassword(req.Password)
@@ -142,8 +143,10 @@ func main() {
 		err := Register(req.Username, password)
 		if err != nil {
 			back.JSON(http.StatusBadRequest, gin.H{"response": "username alredy been taken"})
+			return
 		} else {
 			back.Status(http.StatusCreated)
+			return
 		}
 
 	})
