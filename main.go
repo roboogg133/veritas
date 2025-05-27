@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -70,13 +69,13 @@ func Auth() gin.HandlerFunc {
 		tokenString := back.GetHeader("Authorization")
 
 		if tokenString == "" {
-			back.AbortWithStatusJSON(http.StatusForbidden, gin.H{"response": "invalid token"})
+			back.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
 		if err != nil {
-			back.AbortWithStatusJSON(http.StatusForbidden, gin.H{"response": "invalid token"})
+			back.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
@@ -89,8 +88,8 @@ func main() {
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowOrigins:     []string{"https://servidordomal.fun", "*://31.97.20.160"},
+		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: false,
@@ -151,14 +150,11 @@ func main() {
 
 	})
 
-	r.GET("/service/restrict", Auth(), func(c *gin.Context) {
+	r.GET("/service/validate", Auth(), func(c *gin.Context) {
 
-		user, _ := c.Get("username")
-
-		c.JSON(http.StatusOK, gin.H{"response": fmt.Sprintf("Welcome! %s", user)})
+		c.Status(http.StatusOK)
 	})
 
-	// CORS
 	r.Run(":8080")
 
 }
