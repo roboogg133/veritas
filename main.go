@@ -52,7 +52,6 @@ func Authenticate(user string, rawpass string) bool {
 }
 
 func Register(username string, password string) error {
-
 	config.InitDB()
 
 	_, err := config.DB.Exec(context.Background(),
@@ -64,9 +63,14 @@ func Register(username string, password string) error {
 	return nil
 }
 
-func Auth() gin.HandlerFunc {
+func AuthAcess() gin.HandlerFunc {
 	return func(back *gin.Context) {
-		tokenString := back.GetHeader("Authorization")
+		tokenString, err := back.Cookie("AcessToken")
+
+		if err != nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
 
 		if tokenString == "" {
 			back.AbortWithStatus(http.StatusForbidden)
@@ -74,7 +78,43 @@ func Auth() gin.HandlerFunc {
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
+		if claims == nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
 		if err != nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		if claims.TokenType != "access" {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
+		back.Set("username", claims.Username)
+		back.Next()
+	}
+}
+
+func AuthRefresh() gin.HandlerFunc {
+	return func(back *gin.Context) {
+		tokenString, err := back.Cookie("RefreshToken")
+
+		if err != nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
+		claims, err := config.TokenAuthenticate(tokenString)
+		if claims == nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		if err != nil {
+			back.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		if claims.TokenType != "refresh" {
 			back.AbortWithStatus(http.StatusForbidden)
 			return
 		}
@@ -107,13 +147,23 @@ func main() {
 		value := Authenticate(req.Username, req.Password)
 
 		if value == true {
-			token, err := config.GenerateJWT(req.Username)
+			token, err := config.GenerateJWTAcessToken(req.Username)
 			if err != nil {
-				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate session token"})
+				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
+				return
+			}
+			refresh, err := config.GenerateJWTRefreshToken(req.Username)
+			if err != nil {
+				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
 				return
 			}
 
-			back.JSON(http.StatusOK, gin.H{"response": token})
+			back.SetSameSite(http.SameSiteStrictMode)
+			back.SetCookie("AccessToken", token, 900, "/", "servidordomal.fun", true, true)
+			back.SetSameSite(http.SameSiteStrictMode)
+			back.SetCookie("RefreshToken", refresh, 345600, "/", "servidordomal.fun", true, true)
+
+			back.Status(http.StatusOK)
 			return
 		}
 		if value == false {
@@ -141,7 +191,7 @@ func main() {
 
 		err := Register(req.Username, password)
 		if err != nil {
-			back.JSON(http.StatusBadRequest, gin.H{"response": "username alredy been taken"})
+			back.JSON(http.StatusConflict, gin.H{"response": "username alredy been taken"})
 			return
 		} else {
 			back.Status(http.StatusCreated)
@@ -150,9 +200,51 @@ func main() {
 
 	})
 
-	r.GET("/service/validate", Auth(), func(c *gin.Context) {
+	r.GET("/service/validate", AuthAcess(), func(c *gin.Context) {
 
 		c.Status(http.StatusOK)
+	})
+
+	r.GET("/service/refresh", AuthRefresh(), func(back *gin.Context) {
+
+		usernameRaw, _ := back.Get("username")
+
+		username := usernameRaw.(string)
+
+		token, err := config.GenerateJWTAcessToken(username)
+		if err != nil {
+			back.JSON(http.StatusInternalServerError, gin.H{"response": "error generating token"})
+			return
+		}
+		refresh, err := config.GenerateJWTRefreshToken(username)
+		if err != nil {
+			back.JSON(http.StatusInternalServerError, gin.H{"response": "error generating refresh token"})
+			return
+		}
+
+		http.SetCookie(back.Writer, &http.Cookie{
+			Name:     "AccessToken",
+			Value:    token,
+			MaxAge:   900,
+			Path:     "/",
+			Domain:   "servidordomal.fun",
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+
+		http.SetCookie(back.Writer, &http.Cookie{
+			Name:     "RefreshToken",
+			Value:    refresh,
+			MaxAge:   345600,
+			Path:     "/",
+			Domain:   "servidordomal.fun",
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		back.Status(http.StatusOK)
+
 	})
 
 	r.Run(":8080")

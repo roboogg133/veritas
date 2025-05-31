@@ -18,7 +18,8 @@ var DB *pgxpool.Pool
 var Pass string
 
 type Claims struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
@@ -50,15 +51,16 @@ func InitDB() {
 
 }
 
-func GenerateJWT(username string) (string, error) {
+func GenerateJWTAcessToken(username string) (string, error) {
 
 	godotenv.Load()
 
 	var Secret = []byte(Pass)
-	expirationTime := time.Now().Add(168 * time.Hour)
+	expirationTime := time.Now().Add(15 * time.Minute)
 
 	claims := &Claims{
-		Username: username,
+		Username:  username,
+		TokenType: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -82,4 +84,25 @@ func TokenAuthenticate(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+func GenerateJWTRefreshToken(username string) (string, error) {
+
+	godotenv.Load()
+
+	var Secret = []byte(Pass)
+	expirationTime := time.Now().Add(168 * time.Hour)
+
+	claims := &Claims{
+		Username:  username,
+		TokenType: "refresh",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(Secret)
+
 }
