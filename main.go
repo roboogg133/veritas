@@ -68,21 +68,25 @@ func AuthAccess() gin.HandlerFunc {
 		tokenString, err := c.Cookie("AccessToken")
 
 		if err != nil {
+			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		if tokenString == "" {
+			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
 		if claims == nil {
+			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if err != nil {
+			c.Redirect(http.StatusTemporaryRedirect, "/service/refresh")
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
@@ -130,7 +134,7 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"https://servidordomal.fun", "*://31.97.20.160"},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
@@ -219,7 +223,7 @@ func main() {
 
 	r.GET("/service/validate", AuthAccess(), func(c *gin.Context) {
 
-		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{"response": c.MustGet("username").(string)})
 	})
 
 	r.GET("/service/refresh", AuthRefresh(), func(c *gin.Context) {
@@ -258,13 +262,16 @@ func main() {
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
-		c.Status(http.StatusOK)
+		c.Redirect(http.StatusSeeOther, "/home")
 
 	})
 
 	r.GET("/home", AuthAccess(), func(c *gin.Context) {
+		r.LoadHTMLFiles("pages/home.html")
 
 		username := c.MustGet("username").(string)
+
+		c.HTML(http.StatusOK, "home.html", gin.H{"Name": username})
 	})
 
 	r.Run(":8080")
