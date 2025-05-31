@@ -64,63 +64,63 @@ func Register(username string, password string) error {
 }
 
 func AuthAccess() gin.HandlerFunc {
-	return func(back *gin.Context) {
-		tokenString, err := back.Cookie("AccessToken")
+	return func(c *gin.Context) {
+		tokenString, err := c.Cookie("AccessToken")
 
 		if err != nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		if tokenString == "" {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
 		if claims == nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if err != nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if claims.TokenType != "access" {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
-		back.Set("username", claims.Username)
-		back.Next()
+		c.Set("username", claims.Username)
+		c.Next()
 	}
 }
 
 func AuthRefresh() gin.HandlerFunc {
-	return func(back *gin.Context) {
-		tokenString, err := back.Cookie("RefreshToken")
+	return func(c *gin.Context) {
+		tokenString, err := c.Cookie("RefreshToken")
 
 		if err != nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
 		claims, err := config.TokenAuthenticate(tokenString)
 		if claims == nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if err != nil {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		if claims.TokenType != "refresh" {
-			back.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
-		back.Set("username", claims.Username)
-		back.Next()
+		c.Set("username", claims.Username)
+		c.Next()
 	}
 }
 
@@ -135,12 +135,12 @@ func main() {
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}))
-	r.POST("/service/login", func(back *gin.Context) {
+	r.POST("/service/login", func(c *gin.Context) {
 
 		var req LoginRequest
 
-		if err := back.ShouldBindJSON(&req); err != nil {
-			back.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"response": "badrequest"})
 			return
 		}
 
@@ -149,16 +149,16 @@ func main() {
 		if value == true {
 			token, err := config.GenerateJWTAccessToken(req.Username)
 			if err != nil {
-				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
+				c.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
 				return
 			}
 			refresh, err := config.GenerateJWTRefreshToken(req.Username)
 			if err != nil {
-				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
+				c.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
 				return
 			}
 
-			http.SetCookie(back.Writer, &http.Cookie{
+			http.SetCookie(c.Writer, &http.Cookie{
 				Name:     "AccessToken",
 				Value:    token,
 				MaxAge:   900,
@@ -169,7 +169,7 @@ func main() {
 				SameSite: http.SameSiteStrictMode,
 			})
 
-			http.SetCookie(back.Writer, &http.Cookie{
+			http.SetCookie(c.Writer, &http.Cookie{
 				Name:     "RefreshToken",
 				Value:    refresh,
 				MaxAge:   345600,
@@ -180,27 +180,27 @@ func main() {
 				SameSite: http.SameSiteStrictMode,
 			})
 
-			back.Status(http.StatusOK)
+			c.Status(http.StatusOK)
 			return
 		}
 		if value == false {
-			back.Status(http.StatusUnauthorized)
+			c.Status(http.StatusUnauthorized)
 			return
 		}
 
 	})
 
-	r.POST("/service/register", func(back *gin.Context) {
+	r.POST("/service/register", func(c *gin.Context) {
 
 		var req LoginRequest
 
-		if err := back.ShouldBindJSON(&req); err != nil {
-			back.Status(http.StatusBadRequest)
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.Status(http.StatusBadRequest)
 			return
 		}
 
 		if strings.ContainsAny(req.Username, " ") || strings.ContainsAny(req.Password, " ") || req.Password == "" || req.Username == "" {
-			back.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
+			c.JSON(http.StatusBadRequest, gin.H{"response": "invalid username or password"})
 			return
 		}
 
@@ -208,10 +208,10 @@ func main() {
 
 		err := Register(req.Username, password)
 		if err != nil {
-			back.JSON(http.StatusConflict, gin.H{"response": "username alredy been taken"})
+			c.JSON(http.StatusConflict, gin.H{"response": "username alredy been taken"})
 			return
 		} else {
-			back.Status(http.StatusCreated)
+			c.Status(http.StatusCreated)
 			return
 		}
 
@@ -222,24 +222,22 @@ func main() {
 		c.Status(http.StatusOK)
 	})
 
-	r.GET("/service/refresh", AuthRefresh(), func(back *gin.Context) {
+	r.GET("/service/refresh", AuthRefresh(), func(c *gin.Context) {
 
-		usernameRaw, _ := back.Get("username")
-
-		username := usernameRaw.(string)
+		username := c.MustGet("username").(string)
 
 		token, err := config.GenerateJWTAccessToken(username)
 		if err != nil {
-			back.JSON(http.StatusInternalServerError, gin.H{"response": "error generating token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"response": "error generating token"})
 			return
 		}
 		refresh, err := config.GenerateJWTRefreshToken(username)
 		if err != nil {
-			back.JSON(http.StatusInternalServerError, gin.H{"response": "error generating refresh token"})
+			c.JSON(http.StatusInternalServerError, gin.H{"response": "error generating refresh token"})
 			return
 		}
 
-		http.SetCookie(back.Writer, &http.Cookie{
+		http.SetCookie(c.Writer, &http.Cookie{
 			Name:     "AccessToken",
 			Value:    token,
 			MaxAge:   900,
@@ -250,7 +248,7 @@ func main() {
 			SameSite: http.SameSiteStrictMode,
 		})
 
-		http.SetCookie(back.Writer, &http.Cookie{
+		http.SetCookie(c.Writer, &http.Cookie{
 			Name:     "RefreshToken",
 			Value:    refresh,
 			MaxAge:   345600,
@@ -260,8 +258,13 @@ func main() {
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
-		back.Status(http.StatusOK)
+		c.Status(http.StatusOK)
 
+	})
+
+	r.GET("/home", AuthAccess(), func(c *gin.Context) {
+
+		username := c.MustGet("username").(string)
 	})
 
 	r.Run(":8080")
