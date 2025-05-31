@@ -51,7 +51,7 @@ func InitDB() {
 
 }
 
-func GenerateJWTAcessToken(username string) (string, error) {
+func GenerateJWTAccessToken(username string) (string, error) {
 
 	godotenv.Load()
 

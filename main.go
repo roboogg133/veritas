@@ -63,9 +63,9 @@ func Register(username string, password string) error {
 	return nil
 }
 
-func AuthAcess() gin.HandlerFunc {
+func AuthAccess() gin.HandlerFunc {
 	return func(back *gin.Context) {
-		tokenString, err := back.Cookie("AcessToken")
+		tokenString, err := back.Cookie("AccessToken")
 
 		if err != nil {
 			back.AbortWithStatus(http.StatusForbidden)
@@ -147,7 +147,7 @@ func main() {
 		value := Authenticate(req.Username, req.Password)
 
 		if value == true {
-			token, err := config.GenerateJWTAcessToken(req.Username)
+			token, err := config.GenerateJWTAccessToken(req.Username)
 			if err != nil {
 				back.JSON(http.StatusInternalServerError, gin.H{"response": "failed to generate tokens"})
 				return
@@ -217,7 +217,7 @@ func main() {
 
 	})
 
-	r.GET("/service/validate", AuthAcess(), func(c *gin.Context) {
+	r.GET("/service/validate", AuthAccess(), func(c *gin.Context) {
 
 		c.Status(http.StatusOK)
 	})
@@ -228,7 +228,7 @@ func main() {
 
 		username := usernameRaw.(string)
 
-		token, err := config.GenerateJWTAcessToken(username)
+		token, err := config.GenerateJWTAccessToken(username)
 		if err != nil {
 			back.JSON(http.StatusInternalServerError, gin.H{"response": "error generating token"})
 			return
