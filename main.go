@@ -158,10 +158,27 @@ func main() {
 				return
 			}
 
-			back.SetSameSite(http.SameSiteStrictMode)
-			back.SetCookie("AccessToken", token, 900, "/", "servidordomal.fun", true, true)
-			back.SetSameSite(http.SameSiteStrictMode)
-			back.SetCookie("RefreshToken", refresh, 345600, "/", "servidordomal.fun", true, true)
+			http.SetCookie(back.Writer, &http.Cookie{
+				Name:     "AccessToken",
+				Value:    token,
+				MaxAge:   900,
+				Path:     "/",
+				Domain:   "servidordomal.fun",
+				Secure:   true,
+				HttpOnly: true,
+				SameSite: http.SameSiteStrictMode,
+			})
+
+			http.SetCookie(back.Writer, &http.Cookie{
+				Name:     "RefreshToken",
+				Value:    refresh,
+				MaxAge:   345600,
+				Path:     "/",
+				Domain:   "servidordomal.fun",
+				Secure:   true,
+				HttpOnly: true,
+				SameSite: http.SameSiteStrictMode,
+			})
 
 			back.Status(http.StatusOK)
 			return
